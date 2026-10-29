@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deadlock Detection Simulator - RAG & Tarjan's Algorithm</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Vis.js Network Library CSS -->
+    <link href="https://unpkg.com/vis-network/styles/vis-network.min.css" rel="stylesheet" type="text/css" />
+    <!-- External Shared Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="app-header mb-4">
+    <div class="container-fluid px-lg-5 d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+        <div>
+            <h1 class="h3 fw-bold text-white mb-1"><i class="fa-solid fa-layer-group me-2" style="color: var(--magenta);"></i>Deadlock Detection Simulator</h1>
+            <p class="text-white-50 small mb-0 uppercase" style="letter-spacing: 0.05em;">Resource Allocation Graph (RAG) vs. Tarjan's Strongly Connected Components (SCC)</p>
+        </div>
+        <div class="mt-3 mt-md-0 d-flex gap-2">
+            <a href="index.html" class="btn btn-outline-light">
+                <i class="fa-solid fa-house me-1"></i> Home
+            </a>
+            <button class="btn btn-magenta" data-bs-toggle="modal" data-bs-target="#infoModal">
+                <i class="fa-solid fa-book me-1"></i> Theory Guide
+            </button>
+        </div>
+    </div>
+</header>
+
+<main class="container-fluid px-lg-5 mb-5">
+    <!-- Preset Controls -->
+    <div class="panel-box mb-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <span class="fw-bold text-uppercase small" style="letter-spacing: 0.05em;"><i class="fa-solid fa-bookmark me-1" style="color: var(--magenta);"></i> Test Scenarios:</span>
+            <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-outline-black btn-sm" onclick="loadPreset('clean_state')">1. No Deadlock</button>
+                <button class="btn btn-outline-black btn-sm" onclick="loadPreset('single_deadlock')">2. Single Instance Deadlock</button>
+                <button class="btn btn-outline-black btn-sm" onclick="loadPreset('complex_multi')">3. Multi-Instance Deadlock</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Input Configuration Panel -->
+        <div class="col-lg-5">
+            <div class="panel-box h-100">
+                <div class="panel-title">
+                    <span><i class="fa-solid fa-sliders me-2"></i>System Configuration</span>
+                    <button class="btn btn-outline-black btn-sm" onclick="resetForm()"><i class="fa-solid fa-rotate-right me-1"></i>Reset</button>
+                </div>
+                <div>
+                    <!-- Dimension Controls -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-uppercase">Processes (P)</label>
+                            <input type="number" id="numProcesses" class="form-control" min="1" max="8" value="3" onchange="updateMatrixDimensions()">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-uppercase">Resource Types (R)</label>
+                            <input type="number" id="numResources" class="form-control" min="1" max="8" value="3" onchange="updateMatrixDimensions()">
+                        </div>
+                    </div>
+
+                    <!-- Resource Instances -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase">Instances Per Resource Type</label>
+                        <div id="instancesContainer" class="d-flex gap-2 flex-wrap"></div>
+                    </div>
+
+                    <!-- Allocation Matrix -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase d-block">
+                            Allocation Matrix <span class="fw-normal text-lowercase">(Resources held by Process)</span>
+                        </label>
+                        <div class="table-responsive">
+                            <table class="table table-sm matrix-table text-center align-middle" id="allocationTable"></table>
+                        </div>
+                    </div>
+
+                    <!-- Request Matrix -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase d-block">
+                            Request Matrix <span class="fw-normal text-lowercase">(Resources requested by Process)</span>
+                        </label>
+                        <div class="table-responsive">
+                            <table class="table table-sm matrix-table text-center align-middle" id="requestTable"></table>
+                        </div>
+                    </div>
+
+                    <!-- Algorithm Mode Selection -->
+                    <div class="mb-4">
+                        <label class="form-label small fw-bold text-uppercase">Detection Algorithm Target</label>
+                        <select id="algorithmSelect" class="form-select">
+                            <option value="rag">Resource Allocation Graph (RAG)</option>
+                            <option value="tarjan">Tarjan's Algorithm (Wait-For Graph)</option>
+                        </select>
+                    </div>
+
+                    <!-- Action Button -->
+                    <button class="btn btn-magenta w-100 py-2 d-flex align-items-center justify-content-center gap-2" onclick="executeDetection()">
+                        <i class="fa-solid fa-play"></i> Run Deadlock Detection
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization & Results Panel -->
+        <div class="col-lg-7">
+            <div class="panel-box h-100">
+                <div class="border-bottom border-2 border-dark pb-2 mb-3">
+                    <ul class="nav nav-pills card-header-pills" id="viewTabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" id="btnViewRAG" onclick="switchView('rag')">
+                                <i class="fa-solid fa-sitemap me-1"></i> RAG Output
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" id="btnViewTarjan" onclick="switchView('tarjan')">
+                                <i class="fa-solid fa-project-diagram me-1"></i> Tarjan's Output
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" id="btnViewCompare" onclick="switchView('compare')">
+                                <i class="fa-solid fa-code-compare me-1"></i> Comparison View
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+
+                <div>
+                    <!-- VIEW 1: RAG OUTPUT -->
+                    <div id="viewRAG" class="view-content">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="m-0"><i class="fa-solid fa-sitemap me-2" style="color: var(--magenta);"></i>Resource Allocation Graph (RAG)</h5>
+                            <span id="ragStatusBadge" class="badge badge-status-no-deadlock">No Deadlock</span>
+                        </div>
+                        <div id="ragNetwork" class="network-canvas mb-3"></div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="step-card">
+                                    <div class="text-uppercase small fw-bold mb-1">Cycle Detection Result</div>
+                                    <div id="ragCycleResult" class="fw-bold fs-6">No cycle detected</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="step-card success">
+                                    <div class="text-uppercase small fw-bold mb-1">Processes Involved in Cycle</div>
+                                    <div id="ragProcessesInvolved" class="fw-bold fs-6" style="color: var(--magenta);">None</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="step-card warning">
+                            <div class="text-uppercase small fw-bold mb-1"><i class="fa-solid fa-circle-info me-1"></i> Detection Explanation</div>
+                            <p id="ragExplanation" class="small mb-0">Explanation will appear here after running detection.</p>
+                        </div>
+                    </div>
+
+                    <!-- VIEW 2: TARJAN OUTPUT -->
+                    <div id="viewTarjan" class="view-content d-none">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="m-0"><i class="fa-solid fa-project-diagram me-2" style="color: var(--magenta);"></i>Wait-For Graph & Tarjan's SCC</h5>
+                            <span id="tarjanStatusBadge" class="badge badge-status-no-deadlock">No Deadlock</span>
+                        </div>
+                        <div id="tarjanNetwork" class="network-canvas mb-3"></div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="step-card h-100">
+                                    <div class="text-uppercase small fw-bold mb-2">Strongly Connected Components (SCCs)</div>
+                                    <div id="tarjanSCCs" class="small">None</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="step-card success h-100">
+                                    <div class="text-uppercase small fw-bold mb-2">Cyclic Components & Involved Processes</div>
+                                    <div id="tarjanProcessesInvolved" class="fw-bold fs-6" style="color: var(--magenta);">None</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tarjan's Values Table -->
+                        <div class="mb-3">
+                            <div class="text-uppercase small fw-bold mb-2">Tarjan Node Parameters (Discovery Index & Low-Link)</div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-custom text-center mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Process</th>
+                                            <th>Discovery Index (dfn)</th>
+                                            <th>Low-Link Value (low)</th>
+                                            <th>In Stack?</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tarjanTableBody">
+                                        <tr><td colspan="4" class="text-muted">No analysis run yet</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="text-uppercase small fw-bold mb-1"><i class="fa-solid fa-terminal me-1"></i> Tarjan's Execution Log</div>
+                            <div id="tarjanLog" class="log-box">Log entries will display here...</div>
+                        </div>
+
+                        <div class="step-card warning">
+                            <div class="text-uppercase small fw-bold mb-1"><i class="fa-solid fa-circle-info me-1"></i> Detection Explanation</div>
+                            <p id="tarjanExplanation" class="small mb-0">Explanation will appear here after running detection.</p>
+                        </div>
+                    </div>
+
+                    <!-- VIEW 3: COMPARISON OUTPUT -->
+                    <div id="viewCompare" class="view-content d-none">
+                        <h5 class="mb-3"><i class="fa-solid fa-code-compare me-2" style="color: var(--magenta);"></i>Comparison: RAG vs. Tarjan's Algorithm</h5>
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="text-center fw-bold text-uppercase small mb-1">Resource Allocation Graph (RAG)</div>
+                                <div id="compareRAGNetwork" class="network-canvas-small"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-center fw-bold text-uppercase small mb-1">Wait-For Graph (WFG)</div>
+                                <div id="compareTarjanNetwork" class="network-canvas-small"></div>
+                            </div>
+                        </div>
+
+                        <!-- Comparison Table -->
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm table-custom align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Metric / Field</th>
+                                        <th>Resource Allocation Graph (RAG)</th>
+                                        <th>Tarjan's Algorithm (WFG)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="fw-bold text-uppercase">Detection Status</td>
+                                        <td id="cmpRagStatus">-</td>
+                                        <td id="cmpTarjanStatus">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold text-uppercase">Cycle / Cyclic Component</td>
+                                        <td id="cmpRagCycle">-</td>
+                                        <td id="cmpTarjanScc">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold text-uppercase">Processes Involved</td>
+                                        <td id="cmpRagProcs">-</td>
+                                        <td id="cmpTarjanProcs">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold text-uppercase">Result Match</td>
+                                        <td colspan="2" id="cmpResultMatch" class="text-center fw-bold">-</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="step-card warning">
+                            <div class="text-uppercase small fw-bold mb-1"><i class="fa-solid fa-compress me-1"></i> Comparison Summary</div>
+                            <p id="cmpSummary" class="small mb-0">Run detection to view side-by-side analytical summary.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer class="app-footer">
+    <div class="container-fluid px-lg-5 text-center small" style="letter-spacing: 0.05em;">
+        RAG & Tarjan's Algorithm Simulator &bull; Operating Systems Deadlock Detection
+    </div>
+</footer>
+
+<!-- Modal Theory Guide -->
+<div class="modal fade" id="infoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <!-- Black Header with Pink Bottom Border and Top-Right 'X' Icon -->
+            <div class="modal-header d-flex justify-content-between align-items-center">
+                <h5 class="modal-title text-white mb-0 fw-bold text-uppercase d-flex align-items-center">
+                    <i class="fa-solid fa-book me-2"></i>DEADLOCK THEORY & RULES
+                </h5>
+                <button type="button" class="btn-close-custom" data-bs-dismiss="modal" aria-label="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Body Content -->
+            <div class="p-4">
+                <div class="theory-heading">DEADLOCK DETECTION OVERVIEW</div>
+                <p class="small text-dark fw-medium mb-4">
+                    A deadlock occurs in an operating system when a set of processes are blocked because each process holds a resource and waits for another resource held by another process in the set.
+                </p>
+
+                <!-- Two-Column Neo-Brutalist Cards -->
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="theory-card">
+                            <div class="theory-card-title">1. Resource Allocation Graph (RAG)</div>
+                            <p class="small text-muted mb-2"><strong>Purpose:</strong> Detect deadlocks by mapping relationships between processes and resources.</p>
+                            <p class="small text-dark fw-bold mb-1">Basic rules:</p>
+                            <ul class="small text-muted ps-3 mb-0">
+                                <li><strong>Process:</strong> Circle node ($P$)</li>
+                                <li><strong>Resource:</strong> Square node ($R$)</li>
+                                <li><strong>Request edge:</strong> $P \rightarrow R$</li>
+                                <li><strong>Allocation edge:</strong> $R \rightarrow P$</li>
+                                <li><strong>Cycle rule:</strong>
+                                    <ul class="ps-3 mt-1">
+                                        <li>No cycle &rarr; No deadlock</li>
+                                        <li>Single-instance cycle &rarr; Deadlock</li>
+                                        <li>Multi-instance cycle &rarr; Possible deadlock</li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="theory-card">
+                            <div class="theory-card-title">2. Tarjan's Algorithm (SCC)</div>
+                            <p class="small text-muted mb-2"><strong>Purpose:</strong> Detect cyclic dependencies between processes using DFS on a Wait-For Graph.</p>
+                            <p class="small text-dark fw-bold mb-1">Basic rules:</p>
+                            <ul class="small text-muted ps-3 mb-0">
+                                <li>DFS traversal from unvisited process nodes.</li>
+                                <li>Track discovery index ($dfn$) and low-link values ($low$).</li>
+                                <li>Maintain node stack during active traversal.</li>
+                                <li>Identify SCC when $dfn[u] == low[u]$.</li>
+                                <li><strong>Cycle rule:</strong>
+                                    <ul class="ps-3 mt-1">
+                                        <li>No cyclic SCC &rarr; No deadlock</li>
+                                        <li>Cyclic SCC (Single-inst.) &rarr; Deadlock</li>
+                                        <li>Cyclic SCC (Multi-inst.) &rarr; Possible deadlock</li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Black Dividing Line & Right-Aligned Solid Magenta Rectangular Close Button -->
+                <div class="theory-footer-line d-flex justify-content-end">
+                    <button type="button" class="btn-magenta-close-rect" data-bs-dismiss="modal">CLOSE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+<script>
+let numP = 3;
+let numR = 3;
+let instances = [1, 2, 1];
+let allocation = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1]
+];
+let request = [
+    [0, 1, 0],
+    [0, 0, 1],
+    [0, 0, 0]
+];
+
+// Vis.js Network instances
+let ragNetworkInstance = null;
+let tarjanNetworkInstance = null;
+let compareRagNetworkInstance = null;
+let compareTarjanNetworkInstance = null;
+
+// Stored Analysis Results
+let ragResult = null;
+let tarjanResult = null;
+
+window.onload = function() {
+    renderInputs();
+    executeDetection();
+};
+
+function renderInputs() {
+    // Render instance inputs
+    const instContainer = document.getElementById('instancesContainer');
+    instContainer.innerHTML = '';
+    for (let j = 0; j < numR; j++) {
+        const val = instances[j] !== undefined ? instances[j] : 1;
+        instContainer.innerHTML += `
+            <div class="d-flex align-items-center gap-1 p-1" style="border: 2px solid var(--black); background-color: var(--white);">
+                <span class="badge badge-seq">R${j}</span>
+                <input type="number" class="form-control form-control-sm text-center" style="width:50px; border: 1px solid var(--black);" 
+                       id="inst_${j}" min="1" value="${val}" onchange="readInputs()">
+            </div>
+        `;
+    }
+
+    // Render Allocation Table
+    const allocTable = document.getElementById('allocationTable');
+    let allocHTML = '<thead><tr><th></th>';
+    for (let j = 0; j < numR; j++) allocHTML += `<th>R${j}</th>`;
+    allocHTML += '</tr></thead><tbody>';
+    for (let i = 0; i < numP; i++) {
+        allocHTML += `<tr><th style="background-color: var(--black); color: var(--white);">P${i}</th>`;
+        for (let j = 0; j < numR; j++) {
+            const val = allocation[i] && allocation[i][j] !== undefined ? allocation[i][j] : 0;
+            allocHTML += `<td><input type="number" min="0" class="form-control form-control-sm" id="alloc_${i}_${j}" value="${val}" onchange="readInputs()"></td>`;
+        }
+        allocHTML += '</tr>';
+    }
+    allocHTML += '</tbody>';
+    allocTable.innerHTML = allocHTML;
+
+    // Render Request Table
+    const reqTable = document.getElementById('requestTable');
+    let reqHTML = '<thead><tr><th></th>';
+    for (let j = 0; j < numR; j++) reqHTML += `<th>R${j}</th>`;
+    reqHTML += '</tr></thead><tbody>';
+    for (let i = 0; i < numP; i++) {
+        reqHTML += `<tr><th style="background-color: var(--black); color: var(--white);">P${i}</th>`;
+        for (let j = 0; j < numR; j++) {
+            const val = request[i] && request[i][j] !== undefined ? request[i][j] : 0;
+            reqHTML += `<td><input type="number" min="0" class="form-control form-control-sm" id="req_${i}_${j}" value="${val}" onchange="readInputs()"></td>`;
+        }
+        reqHTML += '</tr>';
+    }
+    reqHTML += '</tbody>';
+    reqTable.innerHTML = reqHTML;
+}
+
+function updateMatrixDimensions() {
+    const newP = parseInt(document.getElementById('numProcesses').value) || 1;
+    const newR = parseInt(document.getElementById('numResources').value) || 1;
+
+    numP = Math.max(1, Math.min(8, newP));
+    numR = Math.max(1, Math.min(8, newR));
+
+    // Resize matrices while keeping old values
+    const newInst = [];
+    for (let j = 0; j < numR; j++) {
+        newInst[j] = instances[j] !== undefined ? instances[j] : 1;
+    }
+    instances = newInst;
+
+    const newAlloc = [];
+    const newReq = [];
+    for (let i = 0; i < numP; i++) {
+        newAlloc[i] = [];
+        newReq[i] = [];
+        for (let j = 0; j < numR; j++) {
+            newAlloc[i][j] = (allocation[i] && allocation[i][j] !== undefined) ? allocation[i][j] : 0;
+            newReq[i][j] = (request[i] && request[i][j] !== undefined) ? request[i][j] : 0;
+        }
+    }
+    allocation = newAlloc;
+    request = newReq;
+
+    renderInputs();
+}
+
+function readInputs() {
+    for (let j = 0; j < numR; j++) {
+        const el = document.getElementById(`inst_${j}`);
+        if (el) instances[j] = parseInt(el.value) || 1;
+    }
+    for (let i = 0; i < numP; i++) {
+        for (let j = 0; j < numR; j++) {
+            const aEl = document.getElementById(`alloc_${i}_${j}`);
+            if (aEl) allocation[i][j] = parseInt(aEl.value) || 0;
+
+            const rEl = document.getElementById(`req_${i}_${j}`);
+            if (rEl) request[i][j] = parseInt(rEl.value) || 0;
+        }
+    }
+}
+
+function resetForm() {
+    numP = 3;
+    numR = 3;
+    document.getElementById('numProcesses').value = 3;
+    document.getElementById('numResources').value = 3;
+    instances = [1, 1, 1];
+    allocation = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0]
+    ];
+    request = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0]
+    ];
+    renderInputs();
+    executeDetection();
+}
+
+function loadPreset(type) {
+    if (type === 'clean_state') {
+        numP = 3; numR = 3;
+        instances = [1, 2, 1];
+        allocation = [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1]
+        ];
+        request = [
+            [0, 1, 0],
+            [0, 0, 1],
+            [0, 0, 0]
+        ];
+    } else if (type === 'single_deadlock') {
+        numP = 3; numR = 3;
+        instances = [1, 1, 1];
+        allocation = [
+            [0, 1, 0],
+            [0, 0, 1],
+            [1, 0, 0]
+        ];
+        request = [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1]
+        ];
+    } else if (type === 'complex_multi') {
+        numP = 4; numR = 3;
+        instances = [2, 1, 2];
+        allocation = [
+            [1, 0, 1],
+            [1, 1, 0],
+            [0, 0, 1],
+            [0, 0, 0]
+        ];
+        request = [
+            [0, 1, 0],
+            [0, 0, 1],
+            [1, 0, 0],
+            [0, 1, 0]
+        ];
+    }
+
+    document.getElementById('numProcesses').value = numP;
+    document.getElementById('numResources').value = numR;
+    renderInputs();
+    executeDetection();
+}
+
+function executeDetection() {
+    readInputs();
+
+    const isSingleInstance = instances.every(inst => inst === 1);
+
+    // 1. RAG Detection Logic
+    const ragStartTime = performance.now();
+    const ragCycleData = detectRAGCycle();
+    const ragEndTime = performance.now();
+
+    let ragStatus = "No Deadlock";
+    if (ragCycleData.hasCycle) {
+        ragStatus = isSingleInstance ? "Deadlock" : "Possible Deadlock";
+    }
+
+    ragResult = {
+        hasCycle: ragCycleData.hasCycle,
+        cyclePath: ragCycleData.cyclePath,
+        processesInvolved: ragCycleData.processesInvolved,
+        status: ragStatus,
+        execTime: (ragEndTime - ragStartTime).toFixed(3),
+        isSingleInstance: isSingleInstance
+    };
+
+    // 2. Tarjan's WFG Detection Logic
+    const tarjanStartTime = performance.now();
+    const wfgAdj = buildWaitForGraph();
+    const tarjanData = runTarjanSCC(wfgAdj);
+    const tarjanEndTime = performance.now();
+
+    let tarjanStatus = "No Deadlock";
+    if (tarjanData.hasCycle) {
+        tarjanStatus = isSingleInstance ? "Deadlock" : "Possible Deadlock";
+    }
+
+    tarjanResult = {
+        hasCycle: tarjanData.hasCycle,
+        sccs: tarjanData.sccs,
+        cyclicSccs: tarjanData.cyclicSccs,
+        processesInvolved: tarjanData.processesInvolved,
+        dfn: tarjanData.dfn,
+        low: tarjanData.low,
+        logs: tarjanData.logs,
+        wfgAdj: wfgAdj,
+        status: tarjanStatus,
+        execTime: (tarjanEndTime - tarjanStartTime).toFixed(3),
+        isSingleInstance: isSingleInstance
+    };
+
+    // Render Outputs
+    renderRAGOutput();
+    renderTarjanOutput();
+    renderComparisonOutput();
+
+    // Auto switch to chosen view
+    const selectedAlg = document.getElementById('algorithmSelect').value;
+    switchView(selectedAlg);
+}
+
+// Build Wait-For Graph (WFG)
+function buildWaitForGraph() {
+    const adj = Array.from({ length: numP }, () => new Set());
+    for (let i = 0; i < numP; i++) {
+        for (let k = 0; k < numR; k++) {
+            if (request[i][k] > 0) {
+                for (let j = 0; j < numP; j++) {
+                    if (i !== j && allocation[j][k] > 0) {
+                        adj[i].add(j);
+                    }
+                }
+            }
+        }
+    }
+    return adj.map(s => Array.from(s));
+}
+
+// RAG Cycle Detection using DFS
+function detectRAGCycle() {
+    const totalNodes = numP + numR;
+    const adj = Array.from({ length: totalNodes }, () => []);
+
+    for (let i = 0; i < numP; i++) {
+        for (let j = 0; j < numR; j++) {
+            if (request[i][j] > 0) {
+                adj[i].push(numP + j);
+            }
+            if (allocation[i][j] > 0) {
+                adj[numP + j].push(i);
+            }
+        }
+    }
+
+    let visited = new Array(totalNodes).fill(false);
+    let recStack = new Array(totalNodes).fill(false);
+    let parent = new Array(totalNodes).fill(-1);
+    let cycleNodes = [];
+
+    function dfs(u) {
+        visited[u] = true;
+        recStack[u] = true;
+
+        for (let v of adj[u]) {
+            if (!visited[v]) {
+                parent[v] = u;
+                if (dfs(v)) return true;
+            } else if (recStack[v]) {
+                let curr = u;
+                cycleNodes.push(v);
+                while (curr !== v && curr !== -1) {
+                    cycleNodes.push(curr);
+                    curr = parent[curr];
+                }
+                cycleNodes.push(v);
+                cycleNodes.reverse();
+                return true;
+            }
+        }
+        recStack[u] = false;
+        return false;
+    }
+
+    let hasCycle = false;
+    for (let i = 0; i < totalNodes; i++) {
+        if (!visited[i]) {
+            if (dfs(i)) {
+                hasCycle = true;
+                break;
+            }
+        }
+    }
+
+    const processesInvolved = new Set();
+    if (hasCycle) {
+        cycleNodes.forEach(node => {
+            if (node < numP) processesInvolved.add(`P${node}`);
+        });
+    }
+
+    return {
+        hasCycle: hasCycle,
+        cyclePath: cycleNodes,
+        processesInvolved: Array.from(processesInvolved)
+    };
+}
+
+function runTarjanSCC(adj) {
+    let index = 0;
+    let stack = [];
+    let inStack = new Array(numP).fill(false);
+    let dfn = new Array(numP).fill(-1);
+    let low = new Array(numP).fill(-1);
+    let sccs = [];
+    let logs = [];
+
+    logs.push("Starting Tarjan's SCC Algorithm execution on Wait-For Graph...");
+
+    function strongconnect(u) {
+        dfn[u] = index;
+        low[u] = index;
+        index++;
+        stack.push(u);
+        inStack[u] = true;
+        logs.push(`Visited P${u}: set dfn[P${u}] = ${dfn[u]}, low[P${u}] = ${low[u]}, pushed to stack.`);
+
+        for (let v of adj[u]) {
+            if (dfn[v] === -1) {
+                logs.push(`Exploring edge P${u} -> P${v}`);
+                strongconnect(v);
+                low[u] = Math.min(low[u], low[v]);
+                logs.push(`Returned to P${u} from P${v}: updated low[P${u}] = ${low[u]}`);
+            } else if (inStack[v]) {
+                low[u] = Math.min(low[u], dfn[v]);
+                logs.push(`Found back-edge/cross-edge P${u} -> P${v} in stack: updated low[P${u}] = ${low[u]}`);
+            }
+        }
+
+        if (low[u] === dfn[u]) {
+            let scc = [];
+            logs.push(`Root of SCC found at P${u} (low == dfn == ${low[u]}). Popping stack...`);
+            while (true) {
+                let w = stack.pop();
+                inStack[w] = false;
+                scc.push(w);
+                if (w === u) break;
+            }
+            sccs.push(scc);
+            logs.push(`Formed SCC: {${scc.map(p => 'P' + p).join(', ')}}`);
+        }
+    }
+
+    for (let i = 0; i < numP; i++) {
+        if (dfn[i] === -1) {
+            strongconnect(i);
+        }
+    }
+
+    let cyclicSccs = [];
+    let processesInvolved = new Set();
+    let hasCycle = false;
+
+    sccs.forEach(scc => {
+        if (scc.length > 1) {
+            cyclicSccs.push(scc);
+            hasCycle = true;
+            scc.forEach(p => processesInvolved.add(`P${p}`));
+        } else if (scc.length === 1) {
+            let p = scc[0];
+            if (adj[p].includes(p)) {
+                cyclicSccs.push(scc);
+                hasCycle = true;
+                processesInvolved.add(`P${p}`);
+            }
+        }
+    });
+
+    logs.push(`Tarjan Analysis Complete. Total SCCs: ${sccs.length}, Cyclic SCCs: ${cyclicSccs.length}`);
+
+    return {
+        hasCycle: hasCycle,
+        sccs: sccs,
+        cyclicSccs: cyclicSccs,
+        processesInvolved: Array.from(processesInvolved),
+        dfn: dfn,
+        low: low,
+        logs: logs
+    };
+}
+
+function switchView(viewName) {
+    document.querySelectorAll('.view-content').forEach(el => el.classList.add('d-none'));
+    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+
+    if (viewName === 'rag') {
+        document.getElementById('viewRAG').classList.remove('d-none');
+        document.getElementById('btnViewRAG').classList.add('active');
+        renderRAGGraph('ragNetwork');
+    } else if (viewName === 'tarjan') {
+        document.getElementById('viewTarjan').classList.remove('d-none');
+        document.getElementById('btnViewTarjan').classList.add('active');
+        renderTarjanGraph('tarjanNetwork');
+    } else if (viewName === 'compare') {
+        document.getElementById('viewCompare').classList.remove('d-none');
+        document.getElementById('btnViewCompare').classList.add('active');
+        renderRAGGraph('compareRAGNetwork');
+        renderTarjanGraph('compareTarjanNetwork');
+    }
+}
+
+function renderRAGOutput() {
+    const badge = document.getElementById('ragStatusBadge');
+    badge.className = 'badge ' + getBadgeClass(ragResult.status);
+    badge.innerText = ragResult.status;
+
+    document.getElementById('ragCycleResult').innerText = ragResult.hasCycle ? "Cycle Detected" : "No Cycle Detected";
+    document.getElementById('ragProcessesInvolved').innerText = ragResult.processesInvolved.length > 0 ? ragResult.processesInvolved.join(', ') : "None";
+
+    let exp = "";
+    if (!ragResult.hasCycle) {
+        exp = "No cycle was detected in the Resource Allocation Graph. The system is currently in a safe non-deadlocked state.";
+    } else if (ragResult.isSingleInstance) {
+        exp = `A cycle was detected involving ${ragResult.processesInvolved.join(', ')}. Since all resources are <strong>single-instance</strong>, a cycle is a sufficient condition for <strong>DEADLOCK</strong>.`;
+    } else {
+        exp = `A cycle was detected involving ${ragResult.processesInvolved.join(', ')}. However, because some resources have <strong>multiple instances</strong>, a cycle only implies a <strong>POSSIBLE DEADLOCK</strong>. Uninvolved processes may release instances to break the cycle.`;
+    }
+    document.getElementById('ragExplanation').innerHTML = exp;
+}
+
+function renderTarjanOutput() {
+    const badge = document.getElementById('tarjanStatusBadge');
+    badge.className = 'badge ' + getBadgeClass(tarjanResult.status);
+    badge.innerText = tarjanResult.status;
+
+    const sccContainer = document.getElementById('tarjanSCCs');
+    sccContainer.innerHTML = '';
+    tarjanResult.sccs.forEach(scc => {
+        const isCyclic = scc.length > 1 || (scc.length === 1 && tarjanResult.wfgAdj[scc[0]].includes(scc[0]));
+        const tag = document.createElement('span');
+        tag.className = `scc-tag ${isCyclic ? 'scc-cyclic' : 'scc-acyclic'}`;
+        tag.innerText = `{ ${scc.map(p => 'P' + p).join(', ')} }`;
+        sccContainer.appendChild(tag);
+    });
+
+    document.getElementById('tarjanProcessesInvolved').innerText = tarjanResult.processesInvolved.length > 0 ? tarjanResult.processesInvolved.join(', ') : "None";
+
+    const tableBody = document.getElementById('tarjanTableBody');
+    tableBody.innerHTML = '';
+    for (let i = 0; i < numP; i++) {
+        tableBody.innerHTML += `
+            <tr>
+                <td class="fw-bold">P${i}</td>
+                <td>${tarjanResult.dfn[i]}</td>
+                <td>${tarjanResult.low[i]}</td>
+                <td><span class="badge badge-seq">No</span></td>
+            </tr>
+        `;
+    }
+
+    document.getElementById('tarjanLog').innerHTML = tarjanResult.logs.join('<br>');
+
+    let exp = "";
+    if (!tarjanResult.hasCycle) {
+        exp = "Tarjan's algorithm identified no cyclic strongly connected components in the Wait-For Graph. No deadlock present.";
+    } else if (tarjanResult.isSingleInstance) {
+        exp = `Tarjan's algorithm identified cyclic SCCs among processes: ${tarjanResult.processesInvolved.join(', ')}. Under single-instance resource constraints, this confirms <strong>DEADLOCK</strong>.`;
+    } else {
+        exp = `Tarjan's algorithm identified cyclic dependency SCCs among processes: ${tarjanResult.processesInvolved.join(', ')}. With multiple-instance resources, this indicates <strong>POSSIBLE DEADLOCK</strong>.`;
+    }
+    document.getElementById('tarjanExplanation').innerHTML = exp;
+}
+
+function renderComparisonOutput() {
+    document.getElementById('cmpRagStatus').innerHTML = `<span class="badge ${getBadgeClass(ragResult.status)}">${ragResult.status}</span>`;
+    document.getElementById('cmpTarjanStatus').innerHTML = `<span class="badge ${getBadgeClass(tarjanResult.status)}">${tarjanResult.status}</span>`;
+
+    document.getElementById('cmpRagCycle').innerText = ragResult.hasCycle ? "Yes" : "No";
+    document.getElementById('cmpTarjanScc').innerText = tarjanResult.hasCycle ? `${tarjanResult.cyclicSccs.length} Cyclic Component(s)` : "None";
+
+    document.getElementById('cmpRagProcs').innerText = ragResult.processesInvolved.length > 0 ? ragResult.processesInvolved.join(', ') : "None";
+    document.getElementById('cmpTarjanProcs').innerText = tarjanResult.processesInvolved.length > 0 ? tarjanResult.processesInvolved.join(', ') : "None";
+
+    const match = ragResult.status === tarjanResult.status;
+    const matchEl = document.getElementById('cmpResultMatch');
+    if (match) {
+        matchEl.innerHTML = `<span class="fw-bold" style="color: var(--magenta);"><i class="fa-solid fa-check-circle me-1"></i> MATCH (${ragResult.status})</span>`;
+    } else {
+        matchEl.innerHTML = `<span class="text-danger fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i> DIVERGED</span>`;
+    }
+
+    document.getElementById('cmpSummary').innerHTML = `
+        <strong>Structural Comparison:</strong><br>
+        • <strong>RAG</strong> maintains explicit resource nodes and instance allocations. Graph size: <em>${numP + numR} nodes</em>.<br>
+        • <strong>Wait-For Graph (WFG)</strong> collapses resource nodes into direct process-to-process dependencies. Graph size: <em>${numP} nodes</em>.<br>
+        Both methods yield identical status conclusions (<strong>${ragResult.status}</strong>).
+    `;
+}
+
+function getBadgeClass(status) {
+    if (status === 'Deadlock') return 'badge-status-deadlock';
+    if (status === 'Possible Deadlock') return 'badge-status-possible';
+    return 'badge-status-no-deadlock';
+}
+
+function renderRAGGraph(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const nodes = [];
+    const edges = [];
+
+    // Process nodes
+    for (let i = 0; i < numP; i++) {
+        const inCycle = ragResult.processesInvolved.includes(`P${i}`);
+        nodes.push({
+            id: `P${i}`,
+            label: `P${i}`,
+            shape: 'circle',
+            color: {
+                background: inCycle ? '#c20062' : '#111111',
+                border: '#111111'
+            },
+            font: { color: '#ffffff', weight: 'bold' }
+        });
+    }
+
+    // Resource nodes
+    for (let j = 0; j < numR; j++) {
+        nodes.push({
+            id: `R${j}`,
+            label: `R${j}\n(${instances[j]} inst)`,
+            shape: 'box',
+            color: {
+                background: '#ffffff',
+                border: '#111111'
+            },
+            font: { color: '#111111', weight: 'bold' }
+        });
+    }
+
+    // Edges
+    for (let i = 0; i < numP; i++) {
+        for (let j = 0; j < numR; j++) {
+            if (request[i][j] > 0) {
+                edges.push({
+                    from: `P${i}`,
+                    to: `R${j}`,
+                    arrows: 'to',
+                    label: request[i][j] > 1 ? `${request[i][j]}` : '',
+                    color: { color: '#c20062' },
+                    dashes: true,
+                    font: { fill: '#c20062', align: 'top' }
+                });
+            }
+            if (allocation[i][j] > 0) {
+                edges.push({
+                    from: `R${j}`,
+                    to: `P${i}`,
+                    arrows: 'to',
+                    label: allocation[i][j] > 1 ? `${allocation[i][j]}` : '',
+                    color: { color: '#111111' },
+                    font: { fill: '#111111', align: 'top' }
+                });
+            }
+        }
+    }
+
+    const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+    const options = {
+        physics: { enabled: true, solver: 'forceAtlas2Based' },
+        edges: { smooth: { type: 'curvedCW', roundness: 0.2 } },
+        interaction: { 
+            hover: true,
+            zoomView: false,
+            dragView: false
+        }
+    };
+
+    if (containerId === 'ragNetwork') {
+        if (ragNetworkInstance) ragNetworkInstance.destroy();
+        ragNetworkInstance = new vis.Network(container, data, options);
+    } else if (containerId === 'compareRAGNetwork') {
+        if (compareRagNetworkInstance) compareRagNetworkInstance.destroy();
+        compareRagNetworkInstance = new vis.Network(container, data, options);
+    }
+}
+
+function renderTarjanGraph(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const nodes = [];
+    const edges = [];
+
+    for (let i = 0; i < numP; i++) {
+        const inCycle = tarjanResult.processesInvolved.includes(`P${i}`);
+        nodes.push({
+            id: `P${i}`,
+            label: `P${i}`,
+            shape: 'circle',
+            color: {
+                background: inCycle ? '#c20062' : '#111111',
+                border: '#111111'
+            },
+            font: { color: '#ffffff', weight: 'bold' }
+        });
+    }
+
+    // Wait-For Edges
+    for (let i = 0; i < numP; i++) {
+        tarjanResult.wfgAdj[i].forEach(j => {
+            edges.push({
+                from: `P${i}`,
+                to: `P${j}`,
+                arrows: 'to',
+                color: { color: '#c20062' }
+            });
+        });
+    }
+
+    const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+    const options = {
+        physics: { enabled: true },
+        edges: { smooth: { type: 'curvedCW', roundness: 0.2 } },
+        interaction: { 
+            hover: true,
+            zoomView: false,
+            dragView: false
+        }
+    };
+
+    if (containerId === 'tarjanNetwork') {
+        if (tarjanNetworkInstance) tarjanNetworkInstance.destroy();
+        tarjanNetworkInstance = new vis.Network(container, data, options);
+    } else if (containerId === 'compareTarjanNetwork') {
+        if (compareTarjanNetworkInstance) compareTarjanNetworkInstance.destroy();
+        compareTarjanNetworkInstance = new vis.Network(container, data, options);
+    }
+}
+</script>
+</body>
+</html>

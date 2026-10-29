@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deadlock Avoidance Simulator - Banker's Algorithm</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- External Shared Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <header class="app-header mb-4">
+        <div class="container-fluid px-lg-5 d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+            <div>
+                <h1 class="h3 fw-bold text-white mb-1"><i class="fa-solid fa-layer-group me-2" style="color: var(--magenta);"></i>DEADLOCK AVOIDANCE SIMULATOR</h1>
+                <p class="text-white-50 small mb-0" style="letter-spacing: 0.05em;">Banker's Algorithm — Resource Request Validation</p>
+            </div>
+            <div class="mt-3 mt-md-0 d-flex gap-2">
+                <a href="index.html" class="btn btn-outline-light">
+                    <i class="fa-solid fa-house me-1"></i> Home
+                </a>
+                <button class="btn btn-magenta" data-bs-toggle="modal" data-bs-target="#infoModal">
+                    <i class="fa-solid fa-book me-1"></i> Theory Guide
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container-fluid px-lg-5 py-2 flex-grow-1">
+        <!-- Notification Alert Area -->
+        <div id="alertContainer"></div>
+
+        <!-- Top Controls & System Presets -->
+        <div class="row g-4 mb-4">
+            <!-- System Setup Card -->
+            <div class="col-lg-8">
+                <div class="panel-box h-100">
+                    <div class="panel-title d-flex justify-content-between align-items-center">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-sliders"></i> SYSTEM CONFIGURATION
+                        </span>
+                        <button id="systemResetBtn" class="btn btn-outline-black btn-sm py-1 px-2 d-flex align-items-center gap-1">
+                            <i class="fa-solid fa-rotate-right"></i> RESET
+                        </button>
+                    </div>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="numProcesses" class="form-label fw-bold small">Processes (1-10)</label>
+                            <input type="number" id="numProcesses" class="form-control" min="1" max="10" value="5">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="numResources" class="form-label fw-bold small">Resource Types (1-6)</label>
+                            <input type="number" id="numResources" class="form-control" min="1" max="6" value="3">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button id="applyDimensionsBtn" class="btn btn-black w-100">
+                                Apply & Rebuild
+                            </button>
+                        </div>
+                        
+                        <!-- Resource Names Input Row -->
+                        <div class="col-12 mt-3">
+                            <label class="form-label fw-bold small text-muted">Resource Labels</label>
+                            <div id="resourceNamesContainer" class="d-flex flex-wrap gap-2">
+                                <!-- Dynamic Resource Name Inputs -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Presets & Quick Actions -->
+            <div class="col-lg-4">
+                <div class="panel-box h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="panel-title">
+                            <i class="fa-solid fa-bookmark text-magenta me-2"></i> TEST SCENARIOS:
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-black btn-sm text-start" onclick="loadPreset('safe')">
+                                Safe State Example
+                            </button>
+                            <button class="btn btn-outline-black btn-sm text-start" onclick="loadPreset('unsafe')">
+                                Unsafe State Example
+                            </button>
+                            <button class="btn btn-outline-black btn-sm text-start" onclick="loadPreset('custom4x4')">
+                                4x4 Matrix Example
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Matrix Inputs Section -->
+        <div class="row g-4 mb-4">
+            <!-- Available Vector Input -->
+            <div class="col-12">
+                <div class="panel-box">
+                    <div class="panel-title">
+                        Available Vector <span class="fw-normal text-lowercase fs-6">(unallocated instances)</span>
+                    </div>
+                    <div id="availableVectorContainer" class="table-responsive">
+                        <!-- Dynamic Available inputs -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Allocation & Max Demand Matrices -->
+            <div class="col-xl-6">
+                <div class="panel-box h-100">
+                    <div class="panel-title">
+                        Allocation Matrix
+                    </div>
+                    <div id="allocationMatrixContainer" class="table-responsive">
+                        <!-- Dynamic Allocation Table -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="panel-box h-100">
+                    <div class="panel-title">
+                        Maximum Demand Matrix
+                    </div>
+                    <div id="maxMatrixContainer" class="table-responsive">
+                        <!-- Dynamic Max Matrix Table -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Control Buttons Bar -->
+        <div class="panel-box mb-4">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div class="d-flex flex-wrap gap-2">
+                    <button id="calcNeedBtn" class="btn btn-outline-black">
+                        1. Calculate Need Matrix
+                    </button>
+                    <button id="checkSafeBtn" class="btn btn-magenta">
+                        2. Check Safe State
+                    </button>
+                    <button id="showStepsBtn" class="btn btn-black">
+                        3. Step Simulation
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Optional Resource Request Section -->
+        <div class="accordion mb-4" id="requestAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingRequest">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRequest" aria-expanded="false" aria-controls="collapseRequest">
+                        Test Immediate Resource Request
+                    </button>
+                </h2>
+                <div id="collapseRequest" class="accordion-collapse collapse" aria-labelledby="headingRequest" data-bs-parent="#requestAccordion">
+                    <div class="accordion-body">
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-3">
+                                <label for="requestProcessSelect" class="form-label fw-bold small">Requesting Process</label>
+                                <select id="requestProcessSelect" class="form-select">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-9">
+                                <label class="form-label fw-bold small">Requested Resource Units</label>
+                                <div id="requestInputsContainer" class="d-flex flex-wrap gap-3">
+                                    <!-- Dynamic request inputs -->
+                                </div>
+                            </div>
+
+                            <div class="col-12 mt-3">
+                                <button id="submitRequestBtn" class="btn btn-magenta">
+                                    Submit Request
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Request Execution Result Output -->
+                        <div id="requestResultContainer" class="mt-4 d-none">
+                            <!-- Request results inserted here dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calculated Need Matrix & Summary Area -->
+        <div id="calculatedArea" class="row g-4 mb-4 d-none">
+            <div class="col-12">
+                <div class="panel-box">
+                    <div class="panel-title d-flex justify-content-between align-items-center">
+                        <span>Calculated Need Matrix <span class="fw-normal text-lowercase fs-6">(Need = Max - Allocation)</span></span>
+                        <span class="badge badge-black">Auto Computed</span>
+                    </div>
+                    <div id="needMatrixContainer" class="table-responsive">
+                        <!-- Need Matrix output table -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Final System Status Banner -->
+        <div id="statusBannerContainer" class="mb-4 d-none">
+            <div id="statusBannerCard">
+                <div id="statusBadgeHeader" class="mb-2"></div>
+                <h3 id="statusTitle" class="fw-bold mb-3"></h3>
+                <div id="safeSequenceVisual" class="d-flex flex-wrap justify-content-center align-items-center gap-2 my-3"></div>
+                <p id="statusDescription" class="m-0"></p>
+            </div>
+        </div>
+
+        <!-- Step-by-Step Simulation Execution Log -->
+        <div id="simulationLogContainer" class="mb-4 d-none">
+            <div class="panel-box">
+                <div class="panel-title d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span>Execution Log</span>
+                    <div class="d-flex gap-2">
+                        <button id="playPauseSimBtn" class="btn btn-sm btn-magenta">
+                            Auto Play
+                        </button>
+                        <button id="resetSimBtn" class="btn btn-sm btn-outline-black">
+                            Reset Animation
+                        </button>
+                    </div>
+                </div>
+
+                <div id="simulationSteps" class="d-flex flex-column gap-2 mt-3">
+                    <!-- Dynamic Step Cards -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Information Modal Popup -->
+    <div class="modal fade" id="infoModal" tabindex="-1" aria-labelledby="infoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="infoModalLabel">
+                        <i class="fa-solid fa-book me-2 text-magenta"></i>DEADLOCK AVOIDANCE: BANKER'S ALGORITHM
+                    </h5>
+                    <button type="button" class="btn-close-custom" data-bs-dismiss="modal" aria-label="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-4">
+                        <h6 class="fw-bold border-bottom pb-2 border-dark">Purpose</h6>
+                        <p class="mb-0">To avoid deadlock. It checks whether allocating resources to a process will keep the system in a safe state.</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="fw-bold border-bottom pb-2 border-dark">1. Basic Rules</h6>
+                        <ol class="mb-0 ps-3">
+                            <li class="mb-1"><strong>Need</strong> = Maximum − Allocation</li>
+                            <li class="mb-1"><strong>Available</strong> = Total Resources − Allocated Resources</li>
+                            <li class="mb-1">A process can execute only if its <strong>Need ≤ Available</strong> for every resource type.</li>
+                            <li class="mb-1">If a process can execute, it finishes and releases its allocated resources.</li>
+                            <li class="mb-1">The released resources are added to <strong>Available</strong>.</li>
+                            <li class="mb-1">Repeat the process until all processes finish or no process can proceed.</li>
+                        </ol>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="fw-bold border-bottom pb-2 border-dark">2. Safe State and Unsafe State</h6>
+                        <ul class="mb-0 ps-3">
+                            <li class="mb-1"><strong>Safe State:</strong> All processes can finish in some order. A safe sequence exists.</li>
+                            <li class="mb-1"><strong>Unsafe State:</strong> A safe sequence cannot be guaranteed. The system may potentially enter a deadlock.</li>
+                            <li class="mb-1"><strong>Deadlock Avoidance:</strong> Grant a resource request only if the resulting state remains safe.</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="fw-bold border-bottom pb-2 border-dark">3. Resource Request Conditions</h6>
+                        <p class="small text-muted mb-2">When a process requests additional resources:</p>
+                        <ol class="mb-0 ps-3">
+                            <li class="mb-1"><strong>Request ≤ Need</strong> — The process cannot request more than its declared maximum.</li>
+                            <li class="mb-1"><strong>Request ≤ Available</strong> — The requested resources must currently be available.</li>
+                            <li class="mb-1">Temporarily allocate the resources and update the matrices.</li>
+                            <li class="mb-1">Run the safety algorithm.</li>
+                            <li class="mb-1">If the state is safe, grant the request.</li>
+                            <li class="mb-1">If the state is unsafe, deny or postpone the request and restore the previous state.</li>
+                        </ol>
+                    </div>
+
+                    <div class="mb-2">
+                        <h6 class="fw-bold border-bottom pb-2 border-dark">4. Important Formulas</h6>
+                        <div class="table-responsive mt-2">
+                            <table class="table table-bordered matrix-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Term</th>
+                                        <th>Formula</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="fw-bold">Need</td>
+                                        <td>Maximum − Allocation</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Available</td>
+                                        <td>Total Resources − Total Allocated Resources</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Temporary Available</td>
+                                        <td>Available − Request</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">New Allocation</td>
+                                        <td>Allocation + Request</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">New Need</td>
+                                        <td>Need − Request</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-dark">
+                    <button type="button" class="btn btn-magenta btn-sm" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="app-footer text-center small">
+        <div class="container-fluid">
+            <span>Banker's Algorithm Simulator &bull; Operating Systems Deadlock Avoidance</span>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Application Logic -->
+    <script>
+        // State variables
+        let numProcesses = 5;
+        let numResources = 3;
+        let resourceNames = ['A', 'B', 'C', 'D', 'E', 'F'];
+        
+        let available = [];
+        let allocation = [];
+        let maxMatrix = [];
+        let needMatrix = [];
+        let simSteps = [];
+        let autoPlayTimer = null;
+
+        // Preset Data Definitions
+        const PRESETS = {
+            safe: {
+                processes: 5,
+                resources: 3,
+                names: ['A', 'B', 'C'],
+                available: [3, 3, 2],
+                allocation: [
+                    [0, 1, 0], // P0
+                    [2, 0, 0], // P1
+                    [3, 0, 2], // P2
+                    [2, 1, 1], // P3
+                    [0, 0, 2]  // P4
+                ],
+                max: [
+                    [7, 5, 3], // P0
+                    [3, 2, 2], // P1
+                    [9, 0, 2], // P2
+                    [2, 2, 2], // P3
+                    [4, 3, 3]  // P4
+                ]
+            },
+            unsafe: {
+                processes: 5,
+                resources: 3,
+                names: ['A', 'B', 'C'],
+                available: [1, 0, 2],
+                allocation: [
+                    [0, 1, 0],
+                    [2, 0, 0],
+                    [3, 0, 3],
+                    [2, 1, 1],
+                    [0, 0, 2]
+                ],
+                max: [
+                    [7, 5, 3],
+                    [3, 2, 2],
+                    [9, 0, 3], // Changed C from 2 to 3
+                    [2, 2, 2],
+                    [4, 3, 3]
+                ]
+            },
+            custom4x4: {
+                processes: 4,
+                resources: 4,
+                names: ['CPU', 'RAM', 'Disk', 'Net'],
+                available: [2, 1, 0, 0],
+                allocation: [
+                    [0, 0, 1, 2],
+                    [1, 0, 0, 0],
+                    [1, 3, 5, 4],
+                    [0, 6, 3, 2]
+                ],
+                max: [
+                    [0, 0, 1, 2],
+                    [1, 7, 5, 0],
+                    [2, 3, 5, 6],
+                    [0, 6, 5, 2]
+                ]
+            }
+        };
+
+        // DOM Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners();
+            loadPreset('safe');
+        });
+
+        function setupEventListeners() {
+            document.getElementById('applyDimensionsBtn').addEventListener('click', handleDimensionChange);
+            
+            // ACTION 1: SHOW ONLY CALCULATE NEED MATRIX
+            document.getElementById('calcNeedBtn').addEventListener('click', () => {
+                if (validateInputs() && calculateNeedMatrix()) {
+                    hideResults();
+                    document.getElementById('calculatedArea').classList.remove('d-none');
+                    document.getElementById('calculatedArea').scrollIntoView({ behavior: 'smooth' });
+                    showAlert('Need matrix successfully calculated.', 'black');
+                }
+            });
+
+            // ACTION 2: SHOW ONLY SAFE STATE CHECK
+            document.getElementById('checkSafeBtn').addEventListener('click', () => {
+                if (validateInputs()) {
+                    calculateNeedMatrix();
+                    runSafetyAlgorithm();
+                    hideResults();
+                    document.getElementById('statusBannerContainer').classList.remove('d-none');
+                    document.getElementById('statusBannerContainer').scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+
+            // ACTION 3: SHOW ONLY STEP SIMULATION
+            document.getElementById('showStepsBtn').addEventListener('click', () => {
+                if (validateInputs()) {
+                    calculateNeedMatrix();
+                    runSafetyAlgorithm();
+                    hideResults();
+                    renderSimulationSteps();
+                    document.getElementById('simulationLogContainer').classList.remove('d-none');
+                    document.getElementById('simulationLogContainer').scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+
+            // RESET BUTTON CLICK LISTENER
+            document.getElementById('systemResetBtn').addEventListener('click', () => {
+                loadPreset('safe');
+                showAlert('System state reset to default sample.', 'black');
+            });
+
+            document.getElementById('submitRequestBtn').addEventListener('click', handleResourceRequest);
+            document.getElementById('playPauseSimBtn').addEventListener('click', toggleAutoPlay);
+            document.getElementById('resetSimBtn').addEventListener('click', resetSimulationSteps);
+        }
+
+        function handleDimensionChange() {
+            const pInput = parseInt(document.getElementById('numProcesses').value);
+            const rInput = parseInt(document.getElementById('numResources').value);
+
+            if (isNaN(pInput) || pInput < 1 || pInput > 10) {
+                showAlert('Processes must be between 1 and 10.', 'magenta');
+                return;
+            }
+            if (isNaN(rInput) || rInput < 1 || rInput > 6) {
+                showAlert('Resource types must be between 1 and 6.', 'magenta');
+                return;
+            }
+
+            numProcesses = pInput;
+            numResources = rInput;
+
+            const defaultLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
+            resourceNames = defaultLabels.slice(0, numResources);
+
+            rebuildResourceNameInputs();
+            rebuildTables();
+            updateRequestDropdowns();
+            hideResults();
+            showAlert(`Updated grid to ${numProcesses} Processes x ${numResources} Resources.`, 'black');
+        }
+
+        function loadPreset(key) {
+            const preset = PRESETS[key];
+            if (!preset) return;
+
+            numProcesses = preset.processes;
+            numResources = preset.resources;
+            resourceNames = [...preset.names];
+
+            document.getElementById('numProcesses').value = numProcesses;
+            document.getElementById('numResources').value = numResources;
+
+            rebuildResourceNameInputs();
+            rebuildTables(preset.available, preset.allocation, preset.max);
+            updateRequestDropdowns();
+            hideResults();
+        }
+
+        function hideResults() {
+            document.getElementById('calculatedArea').classList.add('d-none');
+            document.getElementById('statusBannerContainer').classList.add('d-none');
+            document.getElementById('simulationLogContainer').classList.add('d-none');
+            document.getElementById('requestResultContainer').classList.add('d-none');
+            if (autoPlayTimer) {
+                clearInterval(autoPlayTimer);
+                autoPlayTimer = null;
+            }
+            document.getElementById('playPauseSimBtn').innerHTML = `Auto Play`;
+        }
+
+        function rebuildResourceNameInputs() {
+            const container = document.getElementById('resourceNamesContainer');
+            container.innerHTML = '';
+
+            for (let j = 0; j < numResources; j++) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'input-group input-group-sm mb-1';
+                wrapper.style.width = '110px';
+
+                wrapper.innerHTML = `
+                    <span class="input-group-text fw-bold bg-black text-white border-black">${j}</span>
+                    <input type="text" class="form-control res-name-input" data-index="${j}" value="${resourceNames[j] || 'R' + j}">
+                `;
+                container.appendChild(wrapper);
+            }
+
+            document.querySelectorAll('.res-name-input').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.index);
+                    resourceNames[idx] = e.target.value.trim() || `R${idx}`;
+                    updateTableHeaders();
+                });
+            });
+        }
+
+        function rebuildTables(initAvail = null, initAlloc = null, initMax = null) {
+            // Available Table
+            const availContainer = document.getElementById('availableVectorContainer');
+            let availHTML = `<table class="table table-bordered matrix-table text-center m-0"><thead><tr>`;
+            for (let j = 0; j < numResources; j++) {
+                availHTML += `<th class="res-head-${j}">${resourceNames[j]}</th>`;
+            }
+            availHTML += `</tr></thead><tbody><tr>`;
+            for (let j = 0; j < numResources; j++) {
+                const val = (initAvail && initAvail[j] !== undefined) ? initAvail[j] : 0;
+                availHTML += `<td><input type="number" class="form-control matrix-input mx-auto avail-input" min="0" value="${val}" data-res="${j}"></td>`;
+            }
+            availHTML += `</tr></tbody></table>`;
+            availContainer.innerHTML = availHTML;
+
+            // Allocation Table
+            const allocContainer = document.getElementById('allocationMatrixContainer');
+            let allocHTML = `<table class="table table-bordered matrix-table text-center m-0"><thead><tr><th>Process</th>`;
+            for (let j = 0; j < numResources; j++) {
+                allocHTML += `<th class="res-head-${j}">${resourceNames[j]}</th>`;
+            }
+            allocHTML += `</tr></thead><tbody>`;
+            for (let i = 0; i < numProcesses; i++) {
+                allocHTML += `<tr><td class="fw-bold">P${i}</td>`;
+                for (let j = 0; j < numResources; j++) {
+                    const val = (initAlloc && initAlloc[i] && initAlloc[i][j] !== undefined) ? initAlloc[i][j] : 0;
+                    allocHTML += `<td><input type="number" class="form-control matrix-input mx-auto alloc-input" min="0" value="${val}" data-proc="${i}" data-res="${j}"></td>`;
+                }
+                allocHTML += `</tr>`;
+            }
+            allocHTML += `</tbody></table>`;
+            allocContainer.innerHTML = allocHTML;
+
+            // Max Matrix Table
+            const maxContainer = document.getElementById('maxMatrixContainer');
+            let maxHTML = `<table class="table table-bordered matrix-table text-center m-0"><thead><tr><th>Process</th>`;
+            for (let j = 0; j < numResources; j++) {
+                maxHTML += `<th class="res-head-${j}">${resourceNames[j]}</th>`;
+            }
+            maxHTML += `</tr></thead><tbody>`;
+            for (let i = 0; i < numProcesses; i++) {
+                maxHTML += `<tr><td class="fw-bold">P${i}</td>`;
+                for (let j = 0; j < numResources; j++) {
+                    const val = (initMax && initMax[i] && initMax[i][j] !== undefined) ? initMax[i][j] : 0;
+                    maxHTML += `<td><input type="number" class="form-control matrix-input mx-auto max-input" min="0" value="${val}" data-proc="${i}" data-res="${j}"></td>`;
+                }
+                maxHTML += `</tr>`;
+            }
+            maxHTML += `</tbody></table>`;
+            maxContainer.innerHTML = maxHTML;
+        }
+
+        function updateTableHeaders() {
+            for (let j = 0; j < numResources; j++) {
+                document.querySelectorAll(`.res-head-${j}`).forEach(el => {
+                    el.textContent = resourceNames[j];
+                });
+            }
+            updateRequestDropdowns();
+        }
+
+        function updateRequestDropdowns() {
+            const procSelect = document.getElementById('requestProcessSelect');
+            procSelect.innerHTML = '';
+            for (let i = 0; i < numProcesses; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `Process P${i}`;
+                procSelect.appendChild(opt);
+            }
+
+            const reqContainer = document.getElementById('requestInputsContainer');
+            reqContainer.innerHTML = '';
+            for (let j = 0; j < numResources; j++) {
+                const div = document.createElement('div');
+                div.className = 'd-flex align-items-center gap-2';
+                div.innerHTML = `
+                    <span class="fw-bold small">${resourceNames[j]}:</span>
+                    <input type="number" class="form-control matrix-input req-input" min="0" value="0" data-res="${j}">
+                `;
+                reqContainer.appendChild(div);
+            }
+        }
+
+        function harvestInputs() {
+            available = [];
+            allocation = Array.from({ length: numProcesses }, () => Array(numResources).fill(0));
+            maxMatrix = Array.from({ length: numProcesses }, () => Array(numResources).fill(0));
+
+            document.querySelectorAll('.avail-input').forEach(input => {
+                const res = parseInt(input.dataset.res);
+                available[res] = parseInt(input.value) || 0;
+            });
+
+            document.querySelectorAll('.alloc-input').forEach(input => {
+                const p = parseInt(input.dataset.proc);
+                const r = parseInt(input.dataset.res);
+                allocation[p][r] = parseInt(input.value) || 0;
+            });
+
+            document.querySelectorAll('.max-input').forEach(input => {
+                const p = parseInt(input.dataset.proc);
+                const r = parseInt(input.dataset.res);
+                maxMatrix[p][r] = parseInt(input.value) || 0;
+            });
+        }
+
+        function validateInputs() {
+            harvestInputs();
+
+            for (let j = 0; j < numResources; j++) {
+                if (available[j] < 0) {
+                    showAlert(`Available resource ${resourceNames[j]} cannot be negative.`, 'magenta');
+                    return false;
+                }
+            }
+
+            for (let i = 0; i < numProcesses; i++) {
+                for (let j = 0; j < numResources; j++) {
+                    if (allocation[i][j] < 0 || maxMatrix[i][j] < 0) {
+                        showAlert(`Values for Process P${i} cannot be negative.`, 'magenta');
+                        return false;
+                    }
+                    if (allocation[i][j] > maxMatrix[i][j]) {
+                        showAlert(`Validation Error: Process P${i} Allocation for '${resourceNames[j]}' exceeds Maximum Demand.`, 'magenta');
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function calculateNeedMatrix() {
+            needMatrix = Array.from({ length: numProcesses }, () => Array(numResources).fill(0));
+            for (let i = 0; i < numProcesses; i++) {
+                for (let j = 0; j < numResources; j++) {
+                    needMatrix[i][j] = maxMatrix[i][j] - allocation[i][j];
+                }
+            }
+
+            const container = document.getElementById('needMatrixContainer');
+            let html = `<table class="table table-bordered matrix-table text-center m-0"><thead><tr><th>Process</th>`;
+            for (let j = 0; j < numResources; j++) {
+                html += `<th>${resourceNames[j]}</th>`;
+            }
+            html += `</tr></thead><tbody>`;
+            for (let i = 0; i < numProcesses; i++) {
+                html += `<tr><td class="fw-bold">P${i}</td>`;
+                for (let j = 0; j < numResources; j++) {
+                    html += `<td class="fw-bold">${needMatrix[i][j]}</td>`;
+                }
+                html += `</tr>`;
+            }
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+            return true;
+        }
+
+        function runSafetyAlgorithm(customWork = null, customAlloc = null, customNeed = null) {
+            const work = customWork ? [...customWork] : [...available];
+            const alloc = customAlloc ? customAlloc : allocation;
+            const need = customNeed ? customNeed : needMatrix;
+
+            const finish = Array(numProcesses).fill(false);
+            const safeSeq = [];
+            simSteps = [];
+
+            let count = 0;
+            while (count < numProcesses) {
+                let found = false;
+
+                for (let p = 0; p < numProcesses; p++) {
+                    if (!finish[p]) {
+                        let canExecute = true;
+                        for (let j = 0; j < numResources; j++) {
+                            if (need[p][j] > work[j]) {
+                                canExecute = false;
+                                break;
+                            }
+                        }
+
+                        if (canExecute) {
+                            const prevWork = [...work];
+                            for (let j = 0; j < numResources; j++) {
+                                work[j] += alloc[p][j];
+                            }
+                            finish[p] = true;
+                            safeSeq.push(p);
+                            found = true;
+                            count++;
+
+                            simSteps.push({
+                                step: simSteps.length + 1,
+                                process: p,
+                                success: true,
+                                prevWork: prevWork,
+                                need: [...need[p]],
+                                alloc: [...alloc[p]],
+                                updatedWork: [...work],
+                                finishState: [...finish],
+                                safeSeq: [...safeSeq],
+                                msg: `P${p}'s Need [${need[p].join(', ')}] ≤ Work [${prevWork.join(', ')}]. P${p} executes and releases allocated resources [${alloc[p].join(', ')}]. Updated Work = [${work.join(', ')}].`
+                            });
+
+                            break;
+                        } else {
+                            simSteps.push({
+                                step: simSteps.length + 1,
+                                process: p,
+                                success: false,
+                                prevWork: [...work],
+                                need: [...need[p]],
+                                alloc: [...alloc[p]],
+                                updatedWork: [...work],
+                                finishState: [...finish],
+                                safeSeq: [...safeSeq],
+                                msg: `P${p} cannot execute because Need [${need[p].join(', ')}] > Work [${work.join(', ')}]. Postponed.`
+                            });
+                        }
+                    }
+                }
+
+                if (!found) {
+                    break;
+                }
+            }
+
+            const isSafe = (safeSeq.length === numProcesses);
+            renderStatusBanner(isSafe, safeSeq);
+            return { isSafe, safeSeq, steps: simSteps };
+        }
+
+        function renderStatusBanner(isSafe, safeSeq) {
+            const card = document.getElementById('statusBannerCard');
+            const badgeHeader = document.getElementById('statusBadgeHeader');
+            const title = document.getElementById('statusTitle');
+            const visual = document.getElementById('safeSequenceVisual');
+            const desc = document.getElementById('statusDescription');
+
+            visual.innerHTML = '';
+
+            if (isSafe) {
+                card.className = 'status-panel-safe';
+                badgeHeader.innerHTML = `<span class="badge badge-magenta">SAFE STATE</span>`;
+                title.textContent = 'System is in a SAFE State';
+                title.className = 'fw-bold mb-3';
+                desc.textContent = 'All processes can finish execution without causing a deadlock.';
+
+                safeSeq.forEach((p, idx) => {
+                    const badge = document.createElement('div');
+                    badge.className = 'badge-seq';
+                    badge.innerHTML = `P${p}`;
+                    visual.appendChild(badge);
+
+                    if (idx < safeSeq.length - 1) {
+                        const arrow = document.createElement('div');
+                        arrow.className = 'fw-bold fs-4 mx-1';
+                        arrow.innerHTML = `→`;
+                        visual.appendChild(arrow);
+                    }
+                });
+            } else {
+                card.className = 'status-panel-unsafe';
+                badgeHeader.innerHTML = `<span class="badge badge-magenta">UNSAFE STATE</span>`;
+                title.textContent = 'System is in an UNSAFE State';
+                title.className = 'fw-bold mb-3';
+                desc.textContent = 'No complete safe sequence could be found. System risks potential deadlock.';
+
+                visual.innerHTML = `<div class="badge badge-magenta fs-6 p-2">No Safe Sequence Exists</div>`;
+            }
+        }
+
+        function renderSimulationSteps() {
+            const stepsDiv = document.getElementById('simulationSteps');
+            stepsDiv.innerHTML = '';
+
+            simSteps.forEach((step, index) => {
+                const card = document.createElement('div');
+                const cardType = step.success ? 'success' : 'warning';
+                card.className = `step-card ${cardType}`;
+                card.id = `simStepCard-${index}`;
+
+                card.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge ${step.success ? 'badge-magenta' : 'badge-black'}">Step ${step.step}</span>
+                            <span class="fw-bold">Checking Process P${step.process}</span>
+                        </div>
+                    </div>
+                    <p class="mb-2 small">${step.msg}</p>
+                    <div class="d-flex flex-wrap gap-2 pt-2 border-top border-dark align-items-center">
+                        <span class="small fw-bold">Status:</span>
+                        ${step.finishState.map((f, i) => `
+                            <span class="badge ${f ? 'badge-magenta' : 'badge-outline'}">P${i}:${f ? 'FINISHED' : 'WAIT'}</span>
+                        `).join('')}
+                    </div>
+                `;
+                stepsDiv.appendChild(card);
+            });
+        }
+
+        function toggleAutoPlay() {
+            const btn = document.getElementById('playPauseSimBtn');
+            if (autoPlayTimer) {
+                clearInterval(autoPlayTimer);
+                autoPlayTimer = null;
+                btn.innerHTML = `Auto Play`;
+            } else {
+                renderSimulationSteps();
+                document.getElementById('simulationLogContainer').classList.remove('d-none');
+                
+                const allCards = document.querySelectorAll('.step-card');
+                allCards.forEach(c => c.classList.add('d-none'));
+
+                let currentStep = 0;
+                btn.innerHTML = `Pause`;
+
+                autoPlayTimer = setInterval(() => {
+                    const card = document.getElementById(`simStepCard-${currentStep}`);
+                    if (card) {
+                        card.classList.remove('d-none');
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        card.classList.add('highlight-row');
+                        setTimeout(() => card.classList.remove('highlight-row'), 800);
+                        currentStep++;
+                    } else {
+                        clearInterval(autoPlayTimer);
+                        autoPlayTimer = null;
+                        btn.innerHTML = `Replay`;
+                    }
+                }, 1200);
+            }
+        }
+
+        function resetSimulationSteps() {
+            if (autoPlayTimer) {
+                clearInterval(autoPlayTimer);
+                autoPlayTimer = null;
+            }
+            document.getElementById('playPauseSimBtn').innerHTML = `Auto Play`;
+            if (simSteps.length > 0) {
+                renderSimulationSteps();
+            }
+        }
+
+        function handleResourceRequest() {
+            if (!validateInputs()) return;
+            calculateNeedMatrix();
+
+            const pId = parseInt(document.getElementById('requestProcessSelect').value);
+            const reqInputs = document.querySelectorAll('.req-input');
+            const requestVec = [];
+
+            reqInputs.forEach(input => {
+                requestVec.push(parseInt(input.value) || 0);
+            });
+
+            hideResults();
+            const resultContainer = document.getElementById('requestResultContainer');
+            resultContainer.classList.remove('d-none');
+
+            // Verification 1: Request <= Need
+            let reqExceedsNeed = false;
+            for (let j = 0; j < numResources; j++) {
+                if (requestVec[j] > needMatrix[pId][j]) {
+                    reqExceedsNeed = true;
+                    break;
+                }
+            }
+
+            if (reqExceedsNeed) {
+                renderRequestResult('DENIED', `Request vector [${requestVec.join(', ')}] exceeds Process P${pId}'s declared Need [${needMatrix[pId].join(', ')}].`, pId, requestVec);
+                return;
+            }
+
+            // Verification 2: Request <= Available
+            let reqExceedsAvail = false;
+            for (let j = 0; j < numResources; j++) {
+                if (requestVec[j] > available[j]) {
+                    reqExceedsAvail = true;
+                    break;
+                }
+            }
+
+            if (reqExceedsAvail) {
+                renderRequestResult('POSTPONED', `Process P${pId} must wait. Requested resources [${requestVec.join(', ')}] are not available in System Available vector [${available.join(', ')}].`, pId, requestVec);
+                return;
+            }
+
+            // Verification 3: Safety Check
+            const tempAvailable = [...available];
+            const tempAlloc = allocation.map(row => [...row]);
+            const tempNeed = needMatrix.map(row => [...row]);
+
+            for (let j = 0; j < numResources; j++) {
+                tempAvailable[j] -= requestVec[j];
+                tempAlloc[pId][j] += requestVec[j];
+                tempNeed[pId][j] -= requestVec[j];
+            }
+
+            const safetyResult = runSafetyAlgorithm(tempAvailable, tempAlloc, tempNeed);
+
+            if (safetyResult.isSafe) {
+                renderRequestResult('GRANTED', `Request granted safely. System remains in a safe state with sequence: ${safetyResult.safeSeq.map(p => 'P' + p).join(' → ')}.`, pId, requestVec, safetyResult.safeSeq);
+            } else {
+                renderRequestResult('DENIED', `Request denied. Granting this request leads the system to an UNSAFE state.`, pId, requestVec);
+            }
+        }
+
+        function renderRequestResult(decision, reason, pId, requestVec, safeSeq = null) {
+            const container = document.getElementById('requestResultContainer');
+            let badgeStyle = 'badge-magenta';
+
+            if (decision === 'DENIED' || decision === 'POSTPONED') {
+                badgeStyle = 'badge-black';
+            }
+
+            let html = `
+                <div class="panel-box border-3">
+                    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                        <h6 class="m-0 fw-bold">Resource Request Result</h6>
+                        <span class="badge ${badgeStyle} fs-6 px-3 py-2">
+                            DECISION: ${decision}
+                        </span>
+                    </div>
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <span class="text-muted small d-block">Process</span>
+                            <span class="fw-bold fs-5">Process P${pId}</span>
+                        </div>
+                        <div class="col-md-6">
+                            <span class="text-muted small d-block">Request Vector</span>
+                            <span class="fw-bold fs-5">[${requestVec.join(', ')}]</span>
+                        </div>
+                    </div>
+
+                    <p class="mb-2 small"><strong>Reason:</strong> ${reason}</p>
+            `;
+
+            if (safeSeq) {
+                html += `
+                    <div class="mt-3 pt-3 border-top border-dark">
+                        <span class="small fw-bold d-block mb-2">Safe Sequence:</span>
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            ${safeSeq.map(p => `<span class="badge badge-black">P${p}</span>`).join('<span>→</span>')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+            container.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function showAlert(msg, theme = 'magenta') {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            const alertBg = theme === 'magenta' ? 'bg-black text-white' : 'bg-black text-white';
+            alert.className = `alert alert-dismissible fade show ${alertBg} border-2 border-dark mb-3 small`;
+            alert.role = 'alert';
+            alert.innerHTML = `
+                ${msg}
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            container.appendChild(alert);
+
+            setTimeout(() => {
+                if (alert && alert.parentNode) {
+                    alert.classList.remove('show');
+                    setTimeout(() => alert.remove(), 200);
+                }
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
